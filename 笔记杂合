@@ -1,1 +1,16 @@
 init.
+
+对集合的操作（UNION、INTERSECT、EXCEPT）MySQL只支持UNION操作。
+UNION DISTINCT ：DISTINCT过滤重复项，一般可以直接省略DISTINCT关键字，直接使用UNION。
+    MySQL数据库目前对UNION DISTINCT的实现方式如下：
+      *创建一张临时表，也就是虚拟表；
+      *对这张临时 表的列 添加唯一索引；
+      *将输入的数据插入临时表；
+      *返回虚拟表。
+因为添加了唯一索引，所以可以过滤掉集合中重复的数据项。这里重复的意思是SELECT所选的字段完全相同时，才会算作是重复的。
+
+UNION ALL ：UNION ALL的意思是不会排除掉重复的数据项
+
+***在使用UNION DISTINCT的时候，由于向临时表中添加了唯一索引，插入的速度显然会因此而受到影响。如果确认进行UNION
+操作的两个集合中没有重复的选项，最有效的办法应该是使用UNION ALL。***
+
