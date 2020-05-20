@@ -1,1 +1,761 @@
 B站学习视频链接：https://www.bilibili.com/video/BV1es411u7we?from=search&seid=10547573754423340744
+
+学习笔记：
+MySQL版本
+5.x：
+5.0-5.1：早期产品的延续，升级维护，
+5.4-5.x：整合了第三方公司的新存储引擎（推荐5.5）
+
+1.安装：
+rpm -ivh rpm 软件名
+
+如果安装时与某个软件 xxx 冲突，则需要将冲突的软件卸载掉， yun -y remove xxx
+安装时有日志提示，我们可以修改密码： /usr/bin/mysqladmin/ -u root  password 密码
+
+
+注意：
+如果提示“GPG keys... ”安装失败，解决方案，rpm -ivh rpm 软件名 --force --nodoeps
+
+验证：
+mysqladmin --version
+
+启动：
+service mysql start
+service mysql stop
+service mysql restart
+
+设置开机自启动mysql服务：
+chkconfig mysql on， chkconfig mysql off
+检查开机是否自启动： ntsysv
+
+数据库存放目录：
+ps -ef|grep mysql 可以看到：
+                数据库目录：datadir=/var/lib/mysql
+                pid文件目录：--pid-file=/var/lib/mysql/bigdata01.pid
+                
+                MySQL核心目录：
+                    /var/lib/mysql    ：mysql安装目录
+                    /usr/share/mysql   : 配置文件
+                    /usr/bin    : 命令目录 （mysqladmin 、mysqldump等命令）
+                    /etc/init.d/mysql  :启停脚本
+msql自符编码： mysql里执行 show variables like '%char%';
+        可以发现部分编码是latin，需要统一设置为utf-8，
+        配置编码：
+        vi /etc/my.cnf:
+        [mysql]
+        default-character-set=utf8
+        [client]
+        default-character-set=utf8
+        [mysqld]
+        character_set_server=utf8
+        character_set_client=utf8
+        collation_server=utf8_general_ci
+
+
+mysql server分层：
+
+
+连接层
+提供与客户端连接的服务
+服务层
+1.提供各种用户使用的接口（select ...）
+2.提供SQL优化器（MySQL Query Optimizer）
+引擎层
+提供了各种存储数据的方式（InnoDB MyISAM）
+存储层
+存储数据
+
+2.原理：
+        MySQL逻辑分层: 连接层  服务层  引擎层  存储层
+
+        InnoDB：事务优先    （适合高并发操作：行锁）
+        MyISAM：性能优先   （表锁）
+
+        查询数据库引擎：支持那些引擎？   mysql里执行  show engines;
+        查询数据库默认的存储引擎：     mysql里执行  show  variables like '%storage_engine%';
+        默认使用的是：InnoDB
+
+
+
+
+3.SQL优化
+        原因：性能低、执行时间太长、等待时间太长、语句欠佳（连接查询）、索引失效、服务器参数设置不合理
+
+	1. 
+SQL：
+
+
+
+                编写过程： select distinct .. from ..  join .. on .. where .. group by .. having .. order by .. limit .. 
+
+                解析过程： from .. on .. join .. where ..  group by .. having .. select distinct .. order by .. limit ..  
+
+        2.SQL优化：
+                主要是优化索引
+                
+                索引：相当于书的目录
+                索引：index是帮助MySQL高效获取数据的数据结构。索引是数据结构（树：B树(默认)、Hash树...）
+
+                索引的弊端：
+
+
+			1. 
+索引本身很大，可以存放在内存、硬盘（通常为硬盘）
+			2. 
+索引不是所有情况均适用： a.少量数据   b.频繁更新的字段   c.很少使用的字段
+			3. 
+索引盈亏降低 增删改 的效率（增删改）
+
+
+
+                索引的优势：
+
+
+			1. 
+提高查询效率（降低IO使用率）
+			2. 
+降低CPU使用率（....order by age desc，因为 B树索引 本身就是一个排好序的结构，因此在排序时 可以直接使用）
+
+
+
+
+                
+                三层Btree可以存放 上百万条数据
+                Btree：一般是指B+，数据全部放在叶子节点中
+                B+树中查询任意数据次数：n次（B+树的高度）
+
+
+
+
+4.索引
+        分类：
+                    主键索引：不能重复。id     不能是null
+                    唯一索引：不能重复。id     可以是null
+                    单值索引：单列，age ；一个表可以设置多个单值索引；
+                    复合索引：多个列构成的索引（相当于 书的二级目录： c：chen）   （name，age）（a,b,c,d.....）
+
+        创建索引：
+                    create   索引类型   索引名  on   表（字段）
+                    单值索引：
+                    create index dept_index on tb(dept);
+                    唯一索引：
+                    create unique index name_index on tb(name);
+                    复合索引：
+                    create index dept_name_index on tb(dept,name);
+
+                    注意：如果一个字段是primary key ，则该字段默认就是  主键索引
+
+        删除索引：
+                    drop index 索引名 on 表名；
+                    drop index name_index on tb；
+
+        查询索引：
+                    show index from 表名；
+                    show index from tb；
+
+5.SQL性能优化问题
+        a.分析SQL的执行计划  ：explain  ，可以模拟SQL优化器执行SQL语句，从而让开发人员 知道自己编写的SQL状况
+        b.MySQL查询优化器会干扰我们的优化
+
+        优化方法，官网： https://dev.mysql.com/doc/refman/5.7/en/optimization.html 
+        
+        查询执行计划：            explain   +  SQL语句
+                                            explain  select * from tb；
+
+        id：编号
+        select_type：查询类型
+        table：表
+        type：类型
+        possible_keys：预测用到的索引
+        key：实际使用的索引
+        key_len：实际使用的索引长度
+        ref：表之间的引用
+        rows：通过索引查询到的数据量
+        Extra：额外的信息
+
+
+        查询课程编号为2  或  教师证编号为3  的教师信息
+        explain  +  sql；
+    id：
+        1.id值相同  从上往下  顺序执行。  
+        t3-tc3-c4   
+        tc3-c4-t6
+        表的执行顺序  因数量的个数改变而改变的原因：笛卡儿积
+        a    b    c
+        2    3    4    = 2*3 =6   *  4 =24   计算过程中得到的值更小  [x]（中间过程的值越小越省内存）最优的
+        4    3    2    = 3*4 =12 *  2 =24   
+        得出结论：数据小的表  优先查询；
+
+        2.id值不同：id值越大越优先查询。(本质： 在嵌套子查询时，先查内层  再查外层)
+        查询教授SQL课程的老师的描述（desc）。
+        explain select tc.tcdesc 
+        from teacherCard tc,course c,teacher t 
+        where c.tid = t.tid and t.tcid = tc.tcid
+        and c.cname = 'sql';
+
+        将以上 多表查询 转为 子查询形式：
+        explain select tc.tcdesc from teacherCard tc where tc.tcid = 
+        (select t.tcid from teacher t where t.tid = 
+                (select  c.tid from course c where c.cname = 'sql') 
+        );
+
+        子查询+多表：
+        explain select  t.tname ,tc.tcdesc from teacher t, teacherCard tc where t.tcid = tc.tcid 
+            and t.tid = ( select c.tid from course c where c.cname = 'sql' );
+
+        3.id值有相同，又有不同：id值越大越优先；id值相同，从上往下  顺序执行
+
+    select_type:（查询类型）
+        PRIMARY: 包含子查询SQL中的 主查询（最外层）        
+        SUBQUERY：包含子查询SQL中的 子查询（非最外层）
+        SIMPLE：简单查询  （不包含子查询、union）
+        DERIVED：衍生查询（使用到了临时表）
+                    a.在from子查询中只有一张表
+                        select  cr.cname from (select * from course c where c.tid in(1,2)) cr ;   #cr是临时表
+                    b.在from子查询中，如果有table1 union table2 ， 则table1 就是derived，table2 就是union
+                        select  cr.cname from (select * from course where tid = 1 union select * from course where tid = 2) cr ;
+        UNION：上例；
+        UNION RESULT：告知开发人员，那些表之间存在union查询
+
+    
+    type：（索引类型、类型）
+        system>const>eq_ref>ref>range>index>all   , 要对type进行优化的前提：有索引
+        其中system,const只是理想情况；实际能达到 ref>range
+        开发过程基本做不到：
+        system（忽略）：只有一条数据的系统表；或 衍生表只有一条数据的主查询
+        const：仅仅能查到一条数据的SQL，用于Primary key 或 unique索引（类型 与索引类型有关）
+            explain select tid from test where tid = 1;(tid是primary key)
+        eq_ref:唯一性索引：对于每个索引键的查询，返回匹配唯一行数据（有且只有1个，不能多、不能0）
+        （基本上满足条件的就是primary key，唯一索引，并且查询要求字段的数据量和查询结果的数据量要一一对应）
+        
+        可以实现：
+        ref:非唯一性索引：对于每个索引键的查询，返回匹配的所有行（0,1，多）
+        range：检索指定范围的行，where后面是一个范围查询 [ between  1 and 2，> ,< ,>=, in (1,2) ]   特殊：有时候会失效，从而转为 无索all
+        index：查询全部索引中的数据
+        explain select tid from teacher ; --tid 是索引，只需要扫描索引表，不需要扫描 全部数据
+        all：查询全部表中的数据
+        explain select cid from course ; --cid 不是索引，需要全表扫描，即需要扫描表中的所有数据。
+
+        system/const：结果只有一条数据；
+        eq_ref：结果多条；但是每条数据都是唯一的；
+        ref：结果多条；但是每条数据是可以是（0，1，多）；
+
+        
+    possible_key：可能用到的索引，是一种预测，不准
+    
+    key：实际使用的索引
+    
+    key_len：索引的长度；
+        作用：用于判断复合索引是否被完全使用。（a，b，c）
+
+        create table test_k1(
+            name char(20) not null default ''
+        ) ;
+        
+        alter table test_k1 add index  name_index(name);
+        explain select * from test_k1 where name = '';  --key_len：60
+        在utf8：一个字符占3个字节
+
+        
+        alter table test_k1 add column name1 char(20);    --name可以为null
+        alter table test_k1 add index name1_index(name1);
+        explain select * from test_k1 where name1 = '';  --key_len：61
+        如果索引字段可以为Null，则会使用一个字节用于标识。
+
+        drop index name_index on test_k1;
+        drop index name1_index on test_k1;
+        
+        增加一个复合索引
+        alter table test_k1 add index name_name1_index (name,name1);
+        explain select * from test_k1 where name1='';   --key_len：121
+        explain select * from test_k1 where name='';     --key_len：60
+
+        varchar(20) 需用两个字节 标识可变长度（--key_len：62）
+
+        utf8：一个字符占3个字节
+        gbk：一个字符占2个字节
+        latin：一个字符占1个字节
+        ref：注意与type中的ref值区分。
+            作用：指明当前表所 参照的 字段。
+            select ....  where  a.c = b.x ; （a表的ref是b.x，其中b.x可以是常量 ，const）
+        
+        rows：被索引优化查询的 数据个数（实际通过索引查询到的 数据个数）
+            
+        Extra：
+            using filesort：性能消耗大；需要“额外”的一次排序（查询） 常见于order by语句中。
+            排序前，先查询；
+            如根据name查询的10个人 根据年龄排序。
+            select * from student where name in("1","2"....) order by age;  --using filesort
+            小结：对于单索引，如果排序和查找是同一个字段，则不会出现using filesort；
+            where 哪些字段，就order by那些字段
+            
+            复合索引：不能跨列（最佳左前缀）
+            alter table test02 add index idx_a1_a2_a3 （a1,a2,a3）;
+            explain select * from test02 where a1='' order by a3;    --using filesort
+            explain select * from test02 where a2='' order by a3;    --using filesort
+            explain select * from test02 where a1='' order by a2;    [x]没有跨列
+            小结：避免：where 和order 按照复合索引的顺序使用，不用跨列或无序使用。
+
+
+            using temporary：  性能损耗大，用到了临时表。一般出现在group by语句中。已经有表了，但不适用，必须再来一张表
+            explain select a1 from test02 where a1 in('1','2','3') group by a1;
+            explain select a1 from test02 where a1 in('1','2','3') group by a2;  --using temporary;
+            避免：查询那些列，就根据那些列  group by。
+
+解析过程： 
+from .. on .. join .. where ..  group by .. having .. select distinct .. order by .. limit ..  
+            a.
+                        explain select * from test03 where a2=2 and a4=4 group by a2,a4;  --没有using temporary 
+            b.         
+                        explain select * from test03 where a2=2 and a4=4 group by a3;  --using temporary             
+
+
+              using index:   性能提升；索引覆盖（覆盖索引）。原因：不读取原文件，只从索引文件中获取数据（不需要回表查询）
+                    只要使用到的列 全部都在索引中，就是索引覆盖using index
+                    例如：test02 中有一个复合索引（a1，a2，a3）
+                            select a1，a2 from test02 from where a1="" or a2="";  --using index
+                            
+                            drop index indx_a1_a2_a3 on test02；
+                            alter table test02 add index_a1_a2 (a1,a2);
+                            explain select a1,a2 from test02 where a1='' or  a2="":  --using index
+                            explain select a1,a3 from test02 where a1='' or  a3="":  --没有using inde
+                    using index   时，如果用到了索引覆盖 ，会对 possible_key和key造成影响：
+                    a.如果没有where，则索引只出现在key中；
+                    b.如果where，则索引 出现在key和possible_key中。
+            
+               using  where：  （需要回表查询）
+                    假设age是索引列
+                    但查询语句 select age,name from .... where age = .... ，此语句中必须回原表查name，因此会显示using where
+                    
+                impossible where：where子句永远为false
+                    explain select * from test01 where a1='x' and a1='y'；--impossible where
+                
+                        
+
+alter table test03 add index idx_a1_a2_a3_a4(a1,a2,a3,a4);
+
+explain select a1,a2,a3,a4 from test03 where a1=1 ，a2=2 ， a3=3 ，a4=4;  --推荐写法，因为索引的使用顺序（where 后面的顺序） 和 复合索引的顺序一致。
+explain select a1,a2,a3,a4 from test03 where a4=1 ，a3=2 ， a2=3 ，a1=4;  --虽然编写的顺序 和索引顺序不一致，但是sql在真正执行前 经过了SQL优化器的调整，结果与上条SQL是一致的（被MySQL Query Optimizer优化了）
+以上2个SQL，使用了 全部的复合索引 （通过key_len发现）
+
+explain select a1,a2,a3,a4 from test03 where a1=1 ，a2=2 ， a4=4;  --（a1，a2符合索引顺序，a4跨列了，所以索引从a4失效了）
+通过Extra发现 using where（即回表了），发现key_len只使用了两个索引。
+
+explain select a1,a2,a3,a4 from test03 where a1=1 ，a2=2，a4=4  order by a3;同上基本一样；（where和order by拼起来，a1，a2,a3索引有效）
+查询数据（key_len=4,Extra=using where;using index;）
+explain select a1,a2,a3,a4 from test03 where a1=1 ，a4=4  order by a3; --最大区别（多了using filesort） 
+查询数据（key_len=4,Extra=using where;using index;using filesort）
+using filesort；文件内排序，多了一次额外的查找/排序，不要跨列使用（where 和 order by 拼起来，不要跨列使用）。
+
+
+explain select a1,a2,a3,a4 from test03 where a1=1 ，a4=4  order by a2,a3;  --不会using filesort 不会出现；
+
+总结：i.如果（a,b,c,d）复合索引 和使用的顺序全部一致（且不跨列使用），则复合索引全部使用。
+            如果部分一致（且不跨列使用），则使用部分索引。
+           
+
+优化案例：
+        单标优化、两表优化、三表优化
+          
+            （1）单标优化：
+                    explain select bid from book where typeid in(2,3) and authorid=1 order by typeid desc ;
+                         糟糕的sql，type = all，key_len = null , Extra using where;using filesort;
+                    
+                    优化：加索引
+                    alter table book add index idx_bta (bid,typeid,authorid);    --type变为index
+                    
+                    索引一旦进行 升级优化，需要将之前废弃的索引删掉，防止干扰。
+                    drop index idx_bta on book; 
+
+                    根据SQL实际解析的顺序，调整索引的顺序：
+                    alter table book add index idx_bta (typeid,authorid,bid);     --虽然可以回表查询bid，但是将bid放到索引中 可以提升使用using index；
+                    优化后using filesort；没了
+
+                    再次优化（之前是index级别）；思路。因为范围查询in 索引有时会失效，因此交换 索引的顺序，将typeid 往后移
+                    drop index idx_tab on book;
+                    alter table book add index idx_atb (authorid,typeid,bid);
+                    explain select bid from book where  authorid=1 and typeid in(2,3) order by typeid desc ;
+                    
+                    小结：a.索引不能跨列使用（最佳左前缀）保持索引的定义和使用的顺序一致性。
+                              b.索引需要逐步优化
+                              c.将含in的范围查询 放到where条件的最后，防止失效
+                              
+            （2）两表优化
+                    
+                    左连接：
+                                    select * from teacher2  t left outer join course2 c on t.cid = c.cid where c,,name = 'java';
+                    索引往哪张表加？ 
+                        --小表驱动大表   
+                        --索引建立在经常使用的字段上（本题 t.cid = c.cid可知，t.cid字段使用频繁，因此给该字段加索引）
+                                一般情况对于左外连接，给左表加索引；
+                                             对于右外连接，给右表加索引；
+                    
+                    小表：10    大表：300
+                    select ... where 小表.x10 = 大表.x300；
+                    select ... where 大表.x300 = 小表.x10；                    
+                     以上都是经过
+                     for两层循环，最终循环3000次；但是 对于双层循环来说：一般建议 将数据小的循环 放外层；数据大的循环放内层。
+                     
+                     --当编写... on t.cid = c.cid时，将数据量小的表 放左边（假设此时t表数据量小）。
+                     alter table teacher2 add index index_teahcer2_cid(cid)；  
+                     其他优化情况跟单表类似；
+                
+                    using join buffer;extra中的一个选项，作用：MySQL引擎使用了  连接缓存。
+
+
+            （3）三表优化：
+                        a.小表驱动大表
+                        b.索引建立在经常使用的字段上
+                        
+    避免索引失效的一些原则：
+        一、复合索引：
+        a.复合索引，不要跨列或无序使用（最佳左前缀） --（a,b,c）
+        b.复合索引，尽量使用全索引匹配（所有索引都用上了）
+        c.对于复合索引，如果左边失效，右侧全部失效。
+        d.复合索引不能使用不等于（!=  、<>、）或 is null、is not null，否则自身以及右侧所有索引全部失效；
+        
+        二、不要在索引上进行任何操作（计算、函数、类型转换），否则索引失效
+                    select .. where A.x = ... ;
+                    不要：    select .. where （A.x*3） = ... ; --对索引进行计算  导致索引失效
+                    
+        --SQL优化，是一种概率层面的优化。至于是否实际使用了我们的优化。需要通过explain进行推测。
+        
+        
+        三、体验概率情况（< ， > ， !=）：原因是服务层中有SQL优化器，可能会影响我们的优化。
+            alter table book add index idx_book_at (authorid,typeid);
+            explain select * from book where authorid = 1 and typeid = 2;    --复合索引全部使用
+            explain select * from book where authorid > 1 and typeid = 2;    --复合索引中如果有 > ,则自身和右侧索引全部失效。
+            explain select * from book where authorid = 1 and typeid > 2;    --复合索引idx_book_at 全部使用。
+            ------明显的概率问题------
+            explain select * from book where authorid < 1 and typeid = 2;    --复合索引idx_book_at只用到了一个索引
+            explain select * from book where authorid < 4 and typeid = 2;    --复合索引idx_book_at全部失效
+
+            --我们学习的索引优化，是一个大部分情况适用的结论，但由于SQL优化器等原因   该结论不是100%正确。
+            --一般而言，范围查询（> , < ,in），之后的索引失效。
+        
+        四、补救。尽量使用索引覆盖（using index）
+            （a,b,c）
+             select a,b,c from xx.. where a= .. and b=.. ; （查询的列全部在索引里面，不需要回表查询）
+
+        五、like尽量以“常量”开头，不要以‘%’开头，否则索引失效
+            explain select * from xx where name like "%xx%";   --name索引失效
+        
+            explain select name from xx where name like "%xx%";   --使用索引覆盖挽救一部分索引
+
+        六、尽量不要使用类型转换（显示、隐式），否则索引失效
+            explain select * from teacher where name = ‘abc’;     --索引有效
+            explain select * from teacher where name = 123;           --索引失效，程序底层将123 -> '123'，即进行了类型转换。
+        
+        七、尽量不要使用 or ，否则索引失效
+            explain select * from teacher where name = ‘’and t.cid > 1;  --索引有效
+            explain select * from teacher where name = ‘’or    t.cid > 1;  --索引失效，将or左侧的name失效
+
+
+一些其他的优化方法
+            一、exists 和 in 
+            如果主查询的数据集大，则使用in；
+            如果子查询的数据集大，则使用exists；
+            
+            exists 语法： 将主查询的结果，放到子查询结果中进行条件校验（看子查询是否有数据，如果有数据，则校验成功），如果  符合校验，则保留数据；
+
+            select tname from teacher where exists (select * from teacher);    （只要子查询存在数据，主查询就能保留并返回数据）
+            --等价于  select tname from teacher
+            
+            二、order by 优化
+            using filesort 有两种算法：双路排序、单路排序（根据IO的次数）
+            MySQL4.1之前 默认使用  双路排序；  双路：扫描两次磁盘（1：从磁盘读取排序字段，对排序字段进行排序（在buffer中进行的排序）2：扫描其他字段）
+                            --IO较消耗性能
+            MySQL4.1之后 默认使用  单路排序：只读取一次（全部字段）  ，在buffer中进行排序。但此种单路排序  会与一定的隐患（不一定真的是“单路|一次IO”，可能多次IO） （数据量特别大时，则无法将所有的数据  一次性读取完毕，因此 会进行“分片读取、多次读取”）。注意：单路排序 比双路排序 会占用更多的buffer。单路排序在使用时，如果数据量大，可以考虑调大buffer的容量大小：set max_length_for_sort_data
+            
+            如果set max_length_for_sort_data太低，则MySQL后自动从单路->双路  （太低：需要排序的列总大小超过了max_length_for_sort_data）
+            
+            提高order by查询的策略：
+                a.选择使用单路、双路；调整buffer的容量大小；
+                b.避免select * ....
+                c.复合索引  不要跨列使用，避免using filesort ；
+                d.保证全部的排序字段  排序的一致性（都是升序 或 降序）
+
+SQL排查 - 慢查询日志：MySQL提供的日志记录，用于记录MySQL中响应时间超过阀值的SQL语句（long_query_time，默认10秒）
+        慢查询日志默认是关闭的；建议：开发调优时 打开，而 最终部署时关闭。
+        检查是否开启了 慢查询日志：  show variables like '%slow_query_log%';
+        临时开启：
+                set global slow_query_log =1;
+        
+        慢查询阀值：
+                show variables like “%long_query_time%”;
+                临时开启：
+                set global long_query_time =5;   --设置完毕后，重新登录起效。
+
+
+                模拟慢查询 select sleep(6);
+                --查询超过阀值的SQL：show global status like "%slow_queries%"；
+                
+                （1）慢查询的sql被记录在日志中，因此可以通过日志 查看具体的慢SQL。
+                cat /var/lib/mysql/localhost-slow.log
+                （2）通过mysqldumpslow工具查看慢SQL，可以通过一些过滤条件  快速查支出需要定位的慢SQL
+                s:排序方式
+                r:逆序
+                l:锁定时间
+                g:正则匹配模式
+                
+                --获取返回记录最多的3个SQL
+                        mysqldumpslow -s r -t 3    /var/lib/mysql/localhost-slow.log
+                
+                --获取访问次数最多的3个SQL
+                        mysqldumpslow -s c -t 3    /var/lib/mysql/localhost-slow.log
+                
+                --按照时间排序，前十条包含left join 查询语句的SQL
+                        mysqldumpslow -s t -t 10 -g "left join" /var/lib/mysql/localhost-slow.log
+                
+                语法：
+                        mysqldumpslow 各种参数 慢查询日志的文件
+
+分析海量数据
+        a.模拟海量数据   存储过程（无 return）/储存函数（有 return）
+
+create database testdata;
+use testdata;
+create table dept
+(
+        dno int(5) primary key default 0,
+        dname varchar(20) default '',
+        loc varchar(30) default ''
+)engine=innodb default charset=utf8;
+
+
+create table emp
+(
+        eid int(5) primary key ,
+        ename varchar(20) not null default '',
+        job varchar(20) not null default '',
+        deptno int(5) not null default 0
+)engine=innodb default charset=utf8;
+
+通过储存函数 插入海量数据：
+创建储存函数：
+delimiter $
+create function randstring(n int) returns varchar(255)
+begin
+            declare all_str varchar(100) default 'qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM';
+            declare return_str varchar(255) default  '';
+            declare i int default 0;
+            while i<n
+                do
+                    set return_str = concat( return_str , substring(all_str , FLOOR(1+rand()*52) , 1)  );
+                    set i=i+1;
+            end while; 
+            return  return_str;
+end $
+
+报错“...  DETERMINISTIC,NO SQL, or READS SQL DATA...”
+解决冲突：
+        show variables like '%log_bin_trust_function_creators%';
+        set global log_bin_trust_function_creators =1;
+
+
+delimiter $
+create function rand_num(n int) returns int(5)
+begin
+                declare i int default 0;
+                set i = floor(rand()*100);
+                return i;
+end $
+
+-- 通过存储过程插入海量数据：emp表中，
+delimiter $
+create procedure insert_emp( in eid_start int(10),in data_times int(10))
+begin
+            declare i int default 0 ;
+            set autocommit = 0;
+            repeat
+                insert into emp values(eid_start+i , randstring(5) , 'other' , rand_num());
+                set i = i+1;
+                until i = data_times
+            end repeat;
+            commit;
+end $
+
+-- 通过存储过程插入海量数据：emp表中，
+delimiter $
+create procedure insert_dept( in dno_start int(10),in data_times int(10))
+begin
+            declare i int default 0 ;
+            set autocommit = 0;
+            repeat
+                insert into dept values(dno_start+i , randstring(6) ,randstring(8));
+                set i = i+1;
+                until i = data_times
+            end repeat;
+            commit;
+end $
+
+--插入数据
+        call insert_emp(1000,800000);
+        call insert_dept(10,30);
+
+        b.分析海量数据
+                    set profiling = on;
+                    --show PROFILES; 会记录所有PROFILES打开之后的 全部SQL查询语句所花费的时间。缺点：不够精确，只能看到 总共消费的时间，不能看到各个硬件消费的时间（CPU IO）
+
+                    -- 精确分析：sql诊断
+                    show PROFILE all for query  2；上一步查询的Query_id 
+
+                    全局查询日志：记录开启之后的 全部SQL语句。  （这次的全局的记录操作  仅仅在调优、开发过程中打开即可，在最终的部署实施时 一定要关闭）
+                            show variables like '%general_log%';
+                            set global general_log = 1;
+                            set global log_output = table;
+                            --开启后，会记录所有SQL：会被记录mysql.general_log表中。
+
+
+锁机制：解决因资源共享，而造成的并发问题。
+                示例：买最后一件衣服
+                    A:      X           买：  买前  X加锁 --试衣服  下单  付款 打包  ->X解锁
+                    B:      X           买：  发现X已被加锁，等待解锁   X已售空    
+
+                分类：
+                操作类型：
+                                    a.读锁（共享锁）：对同一个数据（衣服），多个读操作可以同时进行，互不干扰。
+                                    b.写锁（互斥锁）：如果当前写操作没有完毕（买衣服的一系列操作），则无法进行其他的读操作、写操作
+                操作范围：
+                                    a.表锁：一次性对一张表整体加锁。如MyISAM存储引擎使用表锁，开销小、加锁快；无死锁；但锁的范围大，容易发生锁冲突、并发度低；
+                                    b.行锁：一次性对一条数据加锁。如InnoDB存储引擎使用行锁，开销大，加锁慢；容易出现死锁；锁的范围小，不易发生锁冲突、并发度高（很小概率 发生高并发问题：脏读、幻读、不可重复读、丢失更新等问题）
+                                    c.页锁
+                                死锁：加锁两条或多条数据同时想获得彼此，相互不让步
+                                锁冲突：抢同一个锁
+
+                实例：
+                    表锁：
+            create table tablelock
+(
+    id int primary key auto_increment,    --自增操作  MySQL、SQLSERVER支持；Oracle需借助 序列 来实现自增
+    name varchar(20)
+)engine myisam;
+
+insert into tablelock(name) values("a1");
+insert into tablelock(name) values("a2");
+insert into tablelock(name) values("a3");
+insert into tablelock(name) values("a4");
+insert into tablelock(name) values("a5");
+insert into tablelock(name) values("a6");
+insert into tablelock(name) values("a7");
+commit;
+
+增加锁的语法：
+            lock table 表1 read/write ，表2 read/write ，......
+释放锁：
+            unlock tables；
+            
+            查看加锁的表：
+            show open tables;
+            
+            会话：session：每一个访问数据的doc命令行、数据库客户端工具   都是一个会话
+            
+            --加读锁
+            会话0：
+                lock table tablelock read;
+                select * from tablelock；--读（查），可以
+                delete from tablelock where id=1； --写（增删改），不能；
+                
+                select * from emp；--返回 Table 'emp' was not locked with lock tables;
+                delete from emp where eno=1；--写，不可以
+            结论一：
+            --如果某一个会话 对A表加了read锁，则 该会话 可以对A表进行读操作、不能进行写操作；且 该会话不能对其他表进行读、写操作 
+            --即如果给A表加了读锁，则当前会话只能对A表进行读操作。
+            
+            会话1（其他会话）：
+                        select * from tablelock；--读（查），可以
+                        delete from tablelock where id=1； --写（增删改），没报错，在‘等待’会话0将锁释放；
+
+            会话2（其他会话）：            
+                        select * from emp；--读（查），可以
+                        delete from emp where eno=1；--写，可以
+
+
+            结论二：
+                            会话0给A表加了锁；
+                                其他会话的操作：
+                                a.可以对其他表（A表以外的表）进行读、写操作
+                                b.对A表：读-可以，写-需等待锁释放
+
+
+  --加写锁：
+                会话0：
+                        lock table tablelock write;
+                        当前会话（会话0）可以对加了写锁的表  进行任何操作（增删改查）；但不能 操作（增删改查）其他表
+                                    
+                其他会话：
+                        对会话0中加写锁的表  可以进行增删改查的前提是：  等待会话0释放写锁
+
+--MyISAM在执行查询（select）语句前，会自动给涉及的所有表加读锁，
+在执行更新操作（DML）前，会自动给涉及的表加写锁。
+所以对MyISAM表进行操作，会有以下情况：
+a.对MyISAM表的读操作（加读锁），不会阻塞其他进程（会话）对同一表的读请求，
+但会阻塞对同一表的写请求。只有当读锁释放后，才会执行其他进程的写操作。
+b.对MyISAM表的写操作（加写锁），会阻塞其他进程（会话）对同一进程的读和写操作，
+只有当写锁释放后，才会执行其他进程的读写操作。
+
+
+分析表锁定：
+    查看加锁的表：
+            show open tables; --1 代表被加了锁
+    分析表锁定的严重程度；
+            show status like "table%"；
+            Table_locks_immediate ：即可能获取到的锁数
+            Table_locks_waited：需要等待的表锁数（如果该值越大，说明存在越大的锁竞争）
+            
+    一般建议：
+            Table_locks_immediate /  Table_locks_waited  >  5000,建议采用InnoDB引擎，否则MyISAM引擎。
+
+行锁（InnoDB）
+create table linelock（
+id  int（5） primary key auto_increment,
+name varchar(20)
+）engine=innodb;
+
+insert into linelock(name) values('1');
+insert into linelock(name) values('2');
+insert into linelock(name) values('3');
+insert into linelock(name) values('4');
+insert into linelock(name) values('5');
+commit; --MySQL默认自动提交；Oracle不是默认自动提交；
+
+为了研究行锁，暂时将自动commit关闭； set autocommit = 0；以后需要通过commit提交；
+
+    会话0：写操作
+        insert into linelock values(6,"a6");
+    
+    会话1：写操作 同样的数据  --更新时发现  此数据被加锁了。直到其他会话将该锁释放后，才能操作。
+
+对行锁的小结：（模拟买衣服场景）
+1.如果会话x对某条数据a进行DML操作（研究时：关闭了自动commit的情况下），则其他会话必须等待会话x结束事务（commit/rollback）后     才能对数据进行操作。
+2.表锁 是通过unlock table，也可以通过事务解锁； 
+   行锁 是通过事务解锁：commit；rollback；
+
+行锁注意事项：
+a.如果没有索引，则行锁会转为表锁（前面id是主键，即索引）
+!!!--如果索引列发生了类型转换，使索引失效，导致行锁变表锁。
+b.行锁的一种特殊情况：间隙锁：值范围内，但却不存在。
+（linelock表中  没有id=7的数据）
+update linelock set name='x' where id>1 and id<9; --即在此where范围中，没有id=7的数据，则id=7的数据成为间隙。
+间隙：MySQL会自动给 间隙 加锁 ->间隙锁。即 会自动为id=7的数据加锁。
+
+行锁：如果有where，则实际加锁的范围 就是where后面的范围（不是实际的值）
+行锁：
+InnoDB默认采用行锁；
+缺点：比表锁性能损耗大。
+优点：并发能力强，效率高。
+建议：高并发用InnoDB，否则用MyISAM。
+
+行锁分析：
+        show status like "%innodb_row_lock%";
+        Innodb_row_lock_current_waits;当前正在等待锁的数量。
+        Innodb_row_lock_time;等待总时长，从系统启动到现在  一共等待的时间。
+        Innodb_row_lock_time_avg;平均等待时长，从系统启动到现在 平均等待的时间。
+        Innodb_row_lock_time_max;
+        Innodb_row_lock_time_avg;
+        Innodb_row_lock_time_waits;从系统启动到现在 等待的次数。
+
+如果仅仅是查询数据，如何加锁？
+查询语句最后加  for update；
+
+通过for update对query语句进行加锁。
